@@ -1,0 +1,6 @@
+.venv/
+models/
+chromadb/
+.idea/
+__pycache__/
+*.pyc
