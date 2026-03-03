@@ -2,7 +2,7 @@ import chromadb
 import json
 import os
 
-from data_loader import get_document_updates
+from ingestion.data_loader import get_document_updates
 from llama_index.core.node_parser import SemanticSplitterNodeParser
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.core import VectorStoreIndex, StorageContext
