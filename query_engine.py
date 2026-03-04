@@ -19,8 +19,9 @@ def setup_query_engine(year: int, branch: str, model_path: str):
     print("Loading Local LLM...")
     llm = QuantizedLocalLLM(
         model_name=model_path,
-        max_new_tokens=512,
-        temperature=0.1  # Low temperature for strict, factual exam-tutor answers
+        max_new_tokens=256,       # Reduced from 512 — limits generation VRAM
+        context_window=2048,      # Reduced from 4096 — halves the KV cache footprint
+        temperature=0.1
     )
     Settings.llm = llm  # Prevent LlamaIndex from falling back to OpenAI anywhere
 
@@ -62,7 +63,7 @@ if __name__ == "__main__":
     response = engine.query(test_query)
 
     print("\n" + "=" * 50)
-    print("FINAL ANSWER:")
+    print("Answer:")
     print("=" * 50)
     print(response.response)
     print("\n" + "=" * 50)

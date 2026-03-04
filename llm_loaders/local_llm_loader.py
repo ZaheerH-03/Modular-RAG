@@ -40,7 +40,7 @@ class QuantizedLocalLLM(CustomLLM):
             self.model_name,
             device_map="auto",
             quantization_config=quant_config,
-            torch_dtype=torch.float16,
+            torch_dtype=torch.float16,  # bitsandbytes warns about this but transformers still requires it
         )
         self._model.eval()
 

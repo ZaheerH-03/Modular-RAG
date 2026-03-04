@@ -14,7 +14,10 @@ EMBEDDING_MODEL_PATH = os.path.join(BASE_DIR, "models/bge-m3")
 
 
 def load_embedding_model(model_name: str):
-    return HuggingFaceEmbedding(model_name=model_name)
+    # Must be CPU: LLM loads onto GPU first (required for OpenAI fallback fix),
+    # so bge-m3 must stay on CPU or it will consume remaining VRAM and cause
+    # a CUDA OOM during the LLM's inference forward pass (RMSNorm).
+    return HuggingFaceEmbedding(model_name=model_name, device="cpu")
 
 
 def get_vector_db(year: int, branch: str) -> StorageContext:
