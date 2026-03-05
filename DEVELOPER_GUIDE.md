@@ -11,8 +11,28 @@ Every new component follows the same 3-step pattern:
 ```
 1. Create a class that inherits from the right ABC in interfaces/
 2. Implement the required abstract method(s)
-3. (Optional) Add a convenience function so old call sites still work
+3. Register it — either via config.yaml or by passing it directly
 ```
+
+---
+
+## 0. Config-First Approach
+
+Before writing any code, check if `config.yaml` already supports what you need.
+Many changes (model name, top-k values, backend switch) require **zero code changes**:
+
+```yaml
+# config.yaml — change the backend without touching any .py file
+pipeline:
+  llm_backend: "ollama"   # was "local"
+  streaming: true
+
+retrieval:
+  vector_top_k: 10        # was 5
+  fusion_top_k: 5
+```
+
+Only write a new class when you need behaviour that `config.yaml` can't express.
 
 ---
 
@@ -45,14 +65,7 @@ class S3DocumentLoader(BaseDocumentLoader):
         return needs_update, changed_docs, deleted_files, current_hashes, state_log
 ```
 
-**Plug it in** — `build_vector_index.py`:
-```python
-# Replace the default loader inside VectorIndexBuilder
-from ingestion.s3_loader import S3DocumentLoader
-
-builder = VectorIndexBuilder()
-# Patch the loader call, or sub-class VectorIndexBuilder and override _get_updates()
-```
+**Plug it in** — sub-class `VectorIndexBuilder` and override the loader call.
 
 ---
 
@@ -78,7 +91,7 @@ class OpenAIEmbedder(BaseEmbedder):
         return OpenAIEmbedding(model=self._model)
 ```
 
-**Plug it in** — pass it to `VectorIndexBuilder`:
+**Plug it in** — pass it directly to `VectorIndexBuilder`:
 ```python
 from ingestion.openai_embedder import OpenAIEmbedder
 from ingestion.build_vector_index import VectorIndexBuilder
@@ -94,7 +107,14 @@ index = VectorIndexBuilder(embedder=OpenAIEmbedder()).build(4, "ds")
 
 **Interface:** `BaseLLMLoader` → must implement `get_llm()`
 
-**Example:** OpenAI GPT-4o instead of a local quantized model.
+Two loaders already ship with the project:
+
+| Class | File | Backend |
+|---|---|---|
+| `QuantizedLocalLLM` | `llm_loaders/local_llm_loader.py` | HuggingFace + 4-bit bitsandbytes |
+| `OllamaLoader` | `llm_loaders/ollama_loader.py` | Ollama server (streaming ✅) |
+
+**To add a new one** (e.g. OpenAI):
 
 ```python
 # llm_loaders/openai_llm_loader.py
@@ -113,14 +133,18 @@ class OpenAILLMLoader(BaseLLMLoader):
         return OpenAI(model=self._model, temperature=self._temperature)
 ```
 
-**Plug it in** — `query_engine.py`:
+**Plug it in** — add a branch to `_build_llm()` in `query_engine.py`:
 ```python
-from llm_loaders.openai_llm_loader import OpenAILLMLoader
-
-loader = OpenAILLMLoader()
-llm = loader.get_llm()
-Settings.llm = llm
+# query_engine.py — _build_llm() factory
+if backend == "openai":
+    return OpenAILLMLoader(model=cfg.openai_llm.model)
 ```
+
+Then set `pipeline.llm_backend: "openai"` in `config.yaml` and add an `openai_llm:` section.
+
+> ⚠️ **Important:** Do NOT call `super().__init__()` with keyword arguments.
+> `BaseLLMLoader` is a plain ABC — its only parent is `object`. Store your
+> arguments manually as `self._attr = value`.
 
 ---
 
@@ -128,7 +152,7 @@ Settings.llm = llm
 
 **Interface:** `BaseRetrieverBuilder` → must implement `build(index)`
 
-**Example:** A pure vector-only retriever (no BM25), with a higher top-k.
+**Example:** A pure vector-only retriever (no BM25).
 
 ```python
 # retrieval/vector_only_retriever.py
@@ -147,11 +171,11 @@ class VectorOnlyRetrieverBuilder(BaseRetrieverBuilder):
         return VectorIndexRetriever(index=index, similarity_top_k=self._top_k)
 ```
 
-**Plug it in** — `query_engine.py`:
+**Plug it in** — replace the retriever step in `setup_query_engine()`:
 ```python
 from retrieval.vector_only_retriever import VectorOnlyRetrieverBuilder
 
-retriever = VectorOnlyRetrieverBuilder(top_k=10).build(index)
+hybrid_retriever = VectorOnlyRetrieverBuilder(top_k=10).build(index)
 ```
 
 ---
@@ -196,34 +220,32 @@ index = InMemoryIndexBuilder(data_dir="data/4th_yr_ds").build(4, "ds")
 
 **Interface:** `BasePromptProvider` → must implement `get_prompt()`
 
-**Example:** A more conversational prompt that allows the LLM to elaborate.
+`prompts/base.py` already contains two template strings — `_QA_TEMPLATE` (strict, citation-only) and `_NEW_TEMPLATE` (detailed, structured explanation). Switch between them by changing which one `CustomPromptProvider.get_prompt()` returns.
+
+**To add a completely new style:**
 
 ```python
-# prompts/conversational_prompt.py
+# prompts/concise_prompt.py
 
 from interfaces import BasePromptProvider
 from llama_index.core import PromptTemplate
 
-_CONVERSATIONAL_TEMPLATE = (
-    "You are a helpful teaching assistant. Use the sources below to answer "
-    "the student's question in a friendly, detailed way.\n\n"
+_CONCISE_TEMPLATE = (
+    "Answer the following question in 2-3 sentences using only the sources below.\n\n"
     "SOURCES:\n{context_str}\n\n"
-    "QUESTION: {query_str}\n\n"
-    "ANSWER:"
+    "QUESTION: {query_str}\n\nANSWER:"
 )
 
-class ConversationalPromptProvider(BasePromptProvider):
-    """A friendlier, less strict prompt for general tutoring."""
-
+class ConcisePromptProvider(BasePromptProvider):
     def get_prompt(self) -> PromptTemplate:
-        return PromptTemplate(_CONVERSATIONAL_TEMPLATE)
+        return PromptTemplate(_CONCISE_TEMPLATE)
 ```
 
-**Plug it in** — `query_engine.py`:
+**Plug it in** — replace the prompt step in `setup_query_engine()`:
 ```python
-from prompts.conversational_prompt import ConversationalPromptProvider
+from prompts.concise_prompt import ConcisePromptProvider
 
-qa_prompt = ConversationalPromptProvider().get_prompt()
+qa_prompt = ConcisePromptProvider().get_prompt()
 ```
 
 ---
@@ -243,11 +265,12 @@ qa_prompt = ConversationalPromptProvider().get_prompt()
 
 ## Checklist for any new component
 
+- [ ] Check `config.yaml` first — you might not need to write a class at all
 - [ ] Create a new `.py` file in the appropriate directory
 - [ ] `from interfaces import <TheRightABC>`
 - [ ] `class MyNewThing(TheRightABC):`
-- [ ] Implement every `@abstractmethod` (Python will tell you if you missed one)
+- [ ] Implement every `@abstractmethod` (Python will error at instantiation if you miss one)
+- [ ] Store constructor args as `self._attr` — do **not** call `super().__init__()` with kwargs
 - [ ] Add type hints and a docstring to your class and method(s)
-- [ ] Add a test to `tests/test_interfaces.py`:
-      `assert issubclass(MyNewThing, TheRightABC)`
-- [ ] Swap it in at the call site in `query_engine.py` (or pass it as an argument)
+- [ ] Add a test to `tests/test_interfaces.py`: `assert issubclass(MyNewThing, TheRightABC)`
+- [ ] Register it — either add a branch to `_build_llm()` in `query_engine.py`, or pass it as a constructor argument
