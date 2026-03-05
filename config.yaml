@@ -1,0 +1,51 @@
+# =============================================================================
+# ModularRAG Configuration
+# =============================================================================
+# Edit this file to change any setting without touching source code.
+# All paths can be absolute or relative to the project root directory.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Paths
+# -----------------------------------------------------------------------------
+paths:
+  base_dir: "E:/Documents/data_Science/ModularRAG"   # absolute project root
+  db_dir: "chromadb"                                  # relative to base_dir
+  embedding_model: "models/bge-m3"                    # relative to base_dir
+
+# -----------------------------------------------------------------------------
+# Retrieval settings
+# -----------------------------------------------------------------------------
+retrieval:
+  vector_top_k: 5       # top-k results from the dense vector retriever
+  bm25_top_k: 5         # top-k results from the BM25 sparse retriever
+  fusion_top_k: 5       # final top-k results after RRF re-ranking
+  num_queries: 3        # number of query variants (1 = no query expansion)
+
+# -----------------------------------------------------------------------------
+# Local LLM (QuantizedLocalLLM / HuggingFace + bitsandbytes)
+# -----------------------------------------------------------------------------
+local_llm:
+  model: "meta-llama/Llama-3.2-3B-Instruct"
+  max_new_tokens: 256
+  context_window: 2048
+  temperature: 0.1
+
+# -----------------------------------------------------------------------------
+# Ollama LLM (OllamaLoader — requires Ollama server running locally)
+# -----------------------------------------------------------------------------
+ollama_llm:
+  model: "qwen2.5:7b"
+  request_timeout: 120.0
+  context_window: 4096
+  temperature: 0.6
+
+# -----------------------------------------------------------------------------
+# Pipeline defaults  (used by query_engine.py __main__ block)
+# -----------------------------------------------------------------------------
+pipeline:
+  year: 4
+  branch: "ds"
+  llm_backend: "ollama"   # "local" = QuantizedLocalLLM | "ollama" = OllamaLoader
+  streaming: true        # true only works with ollama backend
+  test_query: "Different types of organizational behaviour models in detail?"

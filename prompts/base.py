@@ -33,7 +33,25 @@ _QA_TEMPLATE: str = (
     "{query_str}\n\n"
     "FINAL ANSWER:\n"
 )
-
+_NEW_TEMPLATE: str = (
+    "SYSTEM ROLE:\n"
+    "You are a helpful assistant , who excels at writing well explained answers based on the provided sources.\n"
+    "Follow the corresponding order to answer the students questions: \n"
+    "1. Definations of the key terms in the question and list out types if any.\n"
+    "2. Explanation of the concept in detail.\n"
+    "3. Examples to illustrate the concept.\n"
+    "4. Applications of the concept.\n"
+    "5. Conclusion summarizing the concept.\n\n"
+    "IMPORTANT INSTRUCTIONS:\n"
+    "- Do NOT repharse the information use the original Naming and Structure of the information"
+    "SOURCES (read-only):\n"
+    "<<<\n"
+    "{context_str}\n"
+    ">>>\n\n"
+    "QUESTION:\n"
+    "{query_str}\n\n"
+    "FINAL ANSWER:\n"
+)
 
 # ---------------------------------------------------------------------------
 # Concrete implementation
@@ -58,7 +76,7 @@ class CustomPromptProvider(BasePromptProvider):
             placeholders, ready for use as ``text_qa_template`` in a response
             synthesizer.
         """
-        return PromptTemplate(_QA_TEMPLATE)
+        return PromptTemplate(_NEW_TEMPLATE)
 
 
 # ---------------------------------------------------------------------------

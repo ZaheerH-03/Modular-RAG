@@ -12,13 +12,14 @@ from typing import Any
 
 from llama_index.core import SimpleDirectoryReader
 
+from config import cfg
 from interfaces import BaseDocumentLoader
 
 # ---------------------------------------------------------------------------
 # Module-level constants
 # ---------------------------------------------------------------------------
 
-BASE_DIR: str = "E:/Documents/data_Science/ModularRAG"
+BASE_DIR: str = cfg.paths.base_dir
 
 _YEAR_PREFIXES: dict[int, str] = {1: "1st", 2: "2nd", 3: "3rd", 4: "4th"}
 

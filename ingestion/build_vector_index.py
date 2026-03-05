@@ -14,16 +14,17 @@ from llama_index.core.node_parser import SemanticSplitterNodeParser
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.vector_stores.chroma import ChromaVectorStore
 
+from config import cfg
 from ingestion.data_loader import get_document_updates
 from interfaces import BaseEmbedder, BaseIndexBuilder
 
 # ---------------------------------------------------------------------------
-# Module-level constants
+# Module-level constants (resolved from config)
 # ---------------------------------------------------------------------------
 
-BASE_DIR: str = "E:/Documents/data_Science/ModularRAG"
-DB_DIR: str = os.path.join(BASE_DIR, "chromadb")
-EMBEDDING_MODEL_PATH: str = os.path.join(BASE_DIR, "models/bge-m3")
+BASE_DIR: str = cfg.paths.base_dir
+DB_DIR: str = cfg.paths.db_dir
+EMBEDDING_MODEL_PATH: str = cfg.paths.embedding_model
 
 
 # ---------------------------------------------------------------------------
