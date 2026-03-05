@@ -137,6 +137,15 @@ class VectorIndexBuilder(BaseIndexBuilder):
         )
 
         if needs_update:
+            # Invalidate the BM25 node cache so the retriever rebuilds
+            # fresh nodes from ChromaDB on the next run.
+            bm25_cache = os.path.join(
+                self._db_dir, f"{year}_yr_{branch}_bm25_cache.pkl"
+            )
+            if os.path.exists(bm25_cache):
+                os.remove(bm25_cache)
+                print("BM25 cache invalidated — will rebuild on next retriever call.")
+
             splitter = SemanticSplitterNodeParser(
                 embed_model=embedding_model,
                 buffer_size=3,

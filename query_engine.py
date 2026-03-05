@@ -18,7 +18,7 @@ import os
 from llama_index.core import Settings, get_response_synthesizer
 from llama_index.core.query_engine import RetrieverQueryEngine
 
-from ingestion.build_vector_index import build_vector_index
+from ingestion.build_vector_index import DB_DIR, build_vector_index
 from interfaces import BaseIndexBuilder, BaseLLMLoader, BasePromptProvider, BaseRetrieverBuilder
 from llm_loaders.local_llm_loader import QuantizedLocalLLM
 from prompts.base import get_custom_prompt
@@ -74,7 +74,9 @@ def setup_query_engine(
     index = build_vector_index(year, branch)
 
     # Step 3: Construct the hybrid RRF retriever (vector + BM25).
-    hybrid_retriever = get_hybrid_rrf_retriever(index)
+    #   Pass DB_DIR as cache_dir so BM25 nodes are cached to disk after the
+    #   first reconstruction and loaded instantly on all subsequent runs.
+    hybrid_retriever = get_hybrid_rrf_retriever(index, cache_dir=DB_DIR)
 
     # Step 4: Load the custom strict QA prompt.
     qa_prompt = get_custom_prompt()
