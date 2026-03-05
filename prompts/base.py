@@ -74,7 +74,7 @@ class CustomPromptProvider(BasePromptProvider):
             placeholders, ready for use as ``text_qa_template`` in a response
             synthesizer.
         """
-        return PromptTemplate(_NEW_TEMPLATE)
+        return PromptTemplate(_QA_TEMPLATE)
 
 
 # ---------------------------------------------------------------------------
