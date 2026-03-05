@@ -42,10 +42,6 @@ _NEW_TEMPLATE: str = (
     "3. Examples to illustrate the concept.\n"
     "4. Applications of the concept.\n"
     "5. Conclusion summarizing the concept.\n\n"
-    "IMPORTANT INSTRUCTIONS:\n"
-    "- Do NOT repharse the information use the original Naming and Structure of the information.\n"
-    "- You should strictly sticks to the information provided from the sources and cite only from them.\n"
-    
     "SOURCES (read-only):\n"
     "<<<\n"
     "{context_str}\n"
