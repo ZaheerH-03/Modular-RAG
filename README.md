@@ -1,6 +1,6 @@
 # ModularRAG 🎓
 
-A fully modular, interface-driven **Retrieval-Augmented Generation (RAG)** system built for college academic content. Ask questions about your course notes and get grounded, cited answers — powered by a local quantized LLM, no OpenAI needed.
+A fully modular, interface-driven **Retrieval-Augmented Generation (RAG)** system built for college academic content. Ask questions about your course notes and get grounded, cited answers — powered by a local quantized LLM or Ollama, no OpenAI needed.
 
 ---
 
@@ -9,19 +9,19 @@ A fully modular, interface-driven **Retrieval-Augmented Generation (RAG)** syste
 ```
 PDF Notes ──► Incremental Ingestion ──► ChromaDB (persistent)
                                               │
-              User Query ────────────► Hybrid Retriever (Vector + BM25)
+              User Query ────────────► Hybrid Retriever (Vector + BM25 cached)
                                               │
                                        Response Synthesizer
-                                       (Local LLM + Strict Prompt)
+                                       (Local LLM or Ollama + Prompt)
                                               │
                                        ✅ Grounded Answer + Sources
 ```
 
 1. **Ingestion** — PDFs are hashed (MD5). Only new or modified files are re-processed on each run.
 2. **Semantic Chunking** — `SemanticSplitterNodeParser` splits on topic boundaries, not arbitrary character limits.
-3. **Hybrid Retrieval** — Combines dense vector search (BGE-M3) and BM25 keyword matching, fused via Reciprocal Rank Fusion (RRF).
-4. **Local LLM** — A 4-bit quantized Llama model runs entirely on-device (GPU via `bitsandbytes`).
-5. **Strict Prompt** — The LLM is instructed to answer only from retrieved sources, with inline citations.
+3. **Hybrid Retrieval** — Combines dense vector search (BGE-M3) and BM25 keyword matching, fused via Reciprocal Rank Fusion (RRF). BM25 nodes are cached to disk so reconstruction from ChromaDB only happens once.
+4. **Pluggable LLM** — Switch between a 4-bit quantized local Llama model (`bitsandbytes`) or any model served by a locally running Ollama instance — all via `config.yaml`.
+5. **Configurable Prompt** — Multiple prompt styles available in `prompts/base.py`, switchable without code changes.
 
 ---
 
@@ -40,25 +40,28 @@ ModularRAG/
 │
 ├── ingestion/
 │   ├── data_loader.py           # Incremental MD5 change detection
-│   └── build_vector_index.py    # Embedding + ChromaDB upsert
+│   └── build_vector_index.py    # Embedding + ChromaDB upsert + BM25 cache invalidation
 │
 ├── retrieval/
-│   └── hybrid_retriever.py      # Hybrid RRF (Vector + BM25)
+│   └── hybrid_retriever.py      # Hybrid RRF (Vector + BM25) with disk-cached nodes
 │
 ├── llm_loaders/
-│   └── local_llm_loader.py      # 4-bit quantized local LLM wrapper
+│   ├── local_llm_loader.py      # 4-bit quantized HuggingFace LLM (bitsandbytes)
+│   └── ollama_loader.py         # Ollama server-backed LLM (streaming supported)
 │
 ├── prompts/
-│   └── base.py                  # Strict source-grounded QA prompt
+│   └── base.py                  # QA prompt templates (swap via CustomPromptProvider)
 │
 ├── tests/
-│   └── test_interfaces.py       # Structural tests (no GPU required)
+│   └── test_interfaces.py       # Structural tests — no GPU required
 │
 ├── data/                        # PDFs organized by year/branch  [git-ignored]
 │   ├── 1st_yr_ds/
 │   └── 4th_yr_ds/
-├── chromadb/                    # Persistent vector store          [git-ignored]
+├── chromadb/                    # Persistent vector store + BM25 cache  [git-ignored]
 ├── models/                      # Local model weights              [git-ignored]
+├── config.yaml                  # ⚙️  All settings — edit this, not the code
+├── config.py                    # Typed config loader (reads config.yaml)
 ├── query_engine.py              # 🚀 Main entry point
 ├── DEVELOPER_GUIDE.md           # How to add new components
 └── requirements.txt
@@ -87,13 +90,23 @@ data/
 └── 4th_yr_ds/
 ```
 
-### 3. Set your model path
+### 3. Configure
 
-Edit the `_DEFAULT_MODEL_PATH` constant in `query_engine.py`:
+Open **`config.yaml`** and set your preferences — this is the **only file you need to edit**:
 
-```python
-_DEFAULT_MODEL_PATH = "meta-llama/Llama-3.2-3B-Instruct"
-# or a local directory: "E:/models/my-llama"
+```yaml
+paths:
+  base_dir: "E:/your/project/path"     # ← change this to your actual path
+  embedding_model: "models/bge-m3"
+
+local_llm:
+  model: "meta-llama/Llama-3.2-3B-Instruct"
+
+pipeline:
+  year: 4
+  branch: "ds"
+  llm_backend: "local"    # "local" = HuggingFace | "ollama" = Ollama server
+  streaming: false         # true only works with ollama backend
 ```
 
 ### 4. Run
@@ -102,7 +115,29 @@ _DEFAULT_MODEL_PATH = "meta-llama/Llama-3.2-3B-Instruct"
 python query_engine.py
 ```
 
-The first run ingests and indexes your documents. Subsequent runs skip unchanged files automatically.
+The first run ingests and indexes your documents. Subsequent runs skip unchanged files and load the BM25 node cache instantly.
+
+---
+
+## Switching to Ollama
+
+Start the Ollama server, pull a model, then update `config.yaml`:
+
+```bash
+ollama pull qwen2.5:7b
+```
+
+```yaml
+# config.yaml
+ollama_llm:
+  model: "qwen2.5:7b"
+
+pipeline:
+  llm_backend: "ollama"
+  streaming: true
+```
+
+No code changes needed.
 
 ---
 
@@ -113,8 +148,9 @@ The first run ingests and indexes your documents. Subsequent runs skip unchanged
 | Framework | [LlamaIndex](https://www.llamaindex.ai/) 0.10+ |
 | Vector Store | [ChromaDB](https://www.trychroma.com/) (persistent) |
 | Embedding Model | [BAAI/BGE-M3](https://huggingface.co/BAAI/bge-m3) (CPU, local) |
-| LLM | Llama 3 (4-bit NF4 via `bitsandbytes`) |
-| Sparse Retrieval | BM25 (`llama-index-retrievers-bm25`) |
+| LLM (local) | HuggingFace Transformers + 4-bit NF4 (`bitsandbytes`) |
+| LLM (server) | [Ollama](https://ollama.com/) — any supported model |
+| Sparse Retrieval | BM25 (`llama-index-retrievers-bm25`, disk-cached) |
 | Language | Python 3.10+ |
 | Acceleration | PyTorch + CUDA |
 
